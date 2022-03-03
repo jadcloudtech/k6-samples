@@ -1,22 +1,38 @@
 import http from 'k6/http';
-import { check } from 'k6';
-import { Counter } from 'k6/metrics';
+import { check,sleep } from 'k6';
+import { Counter,Trend,Gauge } from 'k6/metrics';
 
-export const ErrorCount = new Counter('Errors');
+export const CountError = new Counter('Errors');
+export const TrendRTT   = new Trend ('RTT');
+export const GaugeContentSize = new Gauge ('ContentSize');
 
 export const options = {
-        vus : 10,
-        duration : "10s",
+	scenarios: {
+		sample_scenario: {
+			executor: 'shared-iterations',
+			startTime: '5s',
+			vus : 10,
+			iterations: 100,
+			maxDuration : '5s',
+		},
+	},
         thresholds : {
                 http_req_failed: ['rate<0.01'],
-                Errors : ['count<100'],
-        },
+                Errors : ['count<200'],
+		RTT : ['p(95)<300' , 'avg<300' , 'med<250' , 'min<100'],
+		ContentSize :['value<4000'],
+	},
 };
 
 export default function() {
         const res = http.get('http://test.k6.io');
-        let success = check(res, {
+        check(res, {
                 'status is 200': (r) => r.status === 200
         });
-        ErrorCount.add(1);
+        CountError.add(1);
+	TrendRTT.add(res.timings.duration);
+	GaugeContentSize.add(res.body.length);
+
+sleep(1);
 }
+
